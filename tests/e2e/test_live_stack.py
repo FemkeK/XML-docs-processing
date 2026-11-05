@@ -32,14 +32,14 @@ def api():
 
 def _submit(api, sample):
     return api.post(
-        "/documents", content=load_sample(sample), headers={"Content-Type": "application/xml"}
+        "/v1/documents", content=load_sample(sample), headers={"Content-Type": "application/xml"}
     )
 
 
 def _wait_for_final_status(api, document_id, timeout=30.0):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        detail = api.get(f"/documents/{document_id}").json()
+        detail = api.get(f"/v1/documents/{document_id}").json()
         if detail["status"] in FINAL_STATUSES:
             return detail
         time.sleep(0.5)

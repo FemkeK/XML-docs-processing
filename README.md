@@ -18,7 +18,7 @@ make         # overzicht van alle commando's
 
 - **Swagger UI:** <http://localhost:8000/docs>.
   1. Klik *Authorize* (API-key: `dev-key`).
-  2. Kopieer de voorbeeldbestelling uit de beschrijving van `POST /documents` en plak die onder *Try it out*. Swagger-UI kan een letterlijk XML-voorbeeld niet zelf invullen.
+  2. Kopieer de voorbeeldbestelling uit de beschrijving van `POST /v1/documents` en plak die onder *Try it out*. Swagger-UI kan een letterlijk XML-voorbeeld niet zelf invullen.
 - **Redoc:** <http://localhost:8000/redoc> toont hetzelfde voorbeeld als request sample, met een kopieerknop.
 - Meerdere workers: `docker compose up -d --scale worker=3`
 - Retries zien: `SIMULATED_FAILURE_RATE=0.5 docker compose up -d` en volg `docker compose logs -f worker`
@@ -26,7 +26,7 @@ make         # overzicht van alle commando's
 ### Zonder Docker
 
 ```bash
-uv sync
+make install                                            # dependencies + git pre-commit hooks
 cp .env.example .env
 uv run alembic upgrade head                             # schema aanmaken/bijwerken
 uv run uvicorn --factory app.main:create_app --reload   # terminal 1: API
@@ -44,15 +44,15 @@ TEST_DATABASE_URL=postgresql+psycopg://... uv run pytest    # dezelfde tests op 
 ### Voorbeeld
 
 ```bash
-curl -X POST http://localhost:8000/documents \
+curl -X POST http://localhost:8000/v1/documents \
   -H "X-API-Key: dev-key" -H "Content-Type: application/xml" \
   -H "Idempotency-Key: ORD-2026-0001" \
   --data-binary @samples/valid_order.xml
 # → 202 {"id": "…", "status": "RECEIVED", "links": {...}}
 # Hetzelfde verzoek nog eens → 200 met hetzelfde id (header Idempotent-Replayed: true)
 
-curl -H "X-API-Key: dev-key" http://localhost:8000/documents/<id>          # status + historie
-curl -H "X-API-Key: dev-key" http://localhost:8000/documents/<id>/result   # JSON-resultaat
+curl -H "X-API-Key: dev-key" http://localhost:8000/v1/documents/<id>          # status + historie
+curl -H "X-API-Key: dev-key" http://localhost:8000/v1/documents/<id>/result   # JSON-resultaat
 ```
 
 ---
@@ -61,7 +61,7 @@ curl -H "X-API-Key: dev-key" http://localhost:8000/documents/<id>/result   # JSO
 
 ```mermaid
 flowchart LR
-    C[Client] -- "POST /documents (XML)" --> API
+    C[Client] -- "POST /v1/documents (XML)" --> API
     subgraph API[API-proces · FastAPI]
         V[XSD-validatie<br/>veilige parser]
     end
@@ -70,7 +70,7 @@ flowchart LR
     API -. "202 Accepted" .-> C
     W1[Worker 1] & W2[Worker N] -- "claim (FOR UPDATE SKIP LOCKED)" --> DB
     W1 & W2 -- "resultaat / fout" --> DB
-    C -- "GET /documents/{id}[/result]" --> API --> DB
+    C -- "GET /v1/documents/{id}[/result]" --> API --> DB
 ```
 
 **Componenten**
@@ -96,21 +96,23 @@ stateDiagram-v2
     RETRYING --> PROCESSING: na backoff
     PROCESSING --> PROCESSING: lease verlopen (worker gecrasht)
     PROCESSING --> FAILED: permanente fout / pogingen op
-    FAILED --> RECEIVED: POST /documents/{id}/retry
+    FAILED --> RECEIVED: POST /v1/documents/{id}/retry
 ```
 
-Elke overgang wordt vastgelegd in `document_events`, zichtbaar via `GET /documents/{id}`.
+Elke overgang wordt vastgelegd in `document_events`, zichtbaar via `GET /v1/documents/{id}`.
 
 **API**
 
 | Methode | Pad | Beschrijving |
 |---|---|---|
-| `POST` | `/documents` | XML aanleveren → `202` (+ `Location`). Met een bekende `Idempotency-Key`: `200` en het bestaande document. Fouten: `400` niet well-formed, `422` schemafout of key hergebruikt voor een ander document, `413` te groot, `415` verkeerd Content-Type |
-| `GET` | `/documents?status=&limit=&offset=` | Overzicht, optioneel gefilterd op status |
-| `GET` | `/documents/{id}` | Status, aantal pogingen, laatste fout en historie |
-| `GET` | `/documents/{id}/result` | JSON-resultaat (`409` zolang niet `COMPLETED`) |
-| `POST` | `/documents/{id}/retry` | `FAILED` document opnieuw in de queue (`409` bij een gelijktijdige wijziging) |
+| `POST` | `/v1/documents` | XML aanleveren → `202` (+ `Location`). Met een bekende `Idempotency-Key`: `200` en het bestaande document. Fouten: `400` niet well-formed, `422` schemafout of key hergebruikt voor een ander document, `413` te groot, `415` verkeerd Content-Type |
+| `GET` | `/v1/documents?status=&limit=&offset=` | Overzicht, optioneel gefilterd op status |
+| `GET` | `/v1/documents/{id}` | Status, aantal pogingen, laatste fout en historie |
+| `GET` | `/v1/documents/{id}/result` | JSON-resultaat (`409` zolang niet `COMPLETED`) |
+| `POST` | `/v1/documents/{id}/retry` | `FAILED` document opnieuw in de queue (`409` bij een gelijktijdige wijziging) |
 | `GET` | `/health` | Liveness + databasecheck (zonder authenticatie) |
+
+De documentpaden hebben een **versie** (`/v1`). Een wijziging die bestaande clients zou breken, komt onder `/v2` naast de huidige versie, zodat aanleverende partijen in hun eigen tempo kunnen overstappen. `/health` is voor de infrastructuur (load balancer, Docker) en geen onderdeel van dat contract, dus zonder versie.
 
 ---
 
@@ -163,7 +165,7 @@ De standaardoplossing is een *transactional outbox*: het bericht gaat in dezelfd
 
 - `PermanentProcessingError` (businessregel geschonden, ongeldig document) → direct `FAILED`. Opnieuw proberen heeft geen zin.
 - Elke andere fout geldt als tijdelijk → `RETRYING` met exponentiële backoff (2 s, 4 s, 8 s … max 60 s). Na `WORKER_MAX_ATTEMPTS` (standaard 5) volgt `FAILED`.
-- `FAILED` documenten kunnen na een fix opnieuw worden aangeboden via `POST /documents/{id}/retry`.
+- `FAILED` documenten kunnen na een fix opnieuw worden aangeboden via `POST /v1/documents/{id}/retry`.
 
 ### 6. Opslag
 
@@ -236,14 +238,14 @@ scripts/demo.sh      demonstratie van de volledige flow
 
 GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) draait vier stappen:
 
-1. Ruff (lint en format) en **mypy** (typecontrole op `app/` en `migrations/`). Elke functie in `app/` moet type-annotaties hebben.
+1. Ruff (lint en format, inclusief security-regels) en **mypy** (typecontrole op `app/` en `migrations/`). Elke functie in `app/` moet type-annotaties hebben.
 2. De testsuite op SQLite **en** op PostgreSQL, inclusief de migratiecheck. Een vergeten migratie laat CI dus falen. Daarbij wordt de **coverage** gemeten (branch coverage, nu ±93%). Onder de 90% faalt de build.
 3. `docker compose up` gevolgd door de e2e-tests.
 4. **`pip-audit`** op de runtime-dependencies (wat in het image terechtkomt), tegen de bekende kwetsbaarheden in de PyPI/OSV-database. Deze stap draait ook elke maandag, want nieuwe kwetsbaarheden worden gepubliceerd terwijl de code ongewijzigd blijft.
 
 **Dependabot** ([.github/dependabot.yml](.github/dependabot.yml)) opent wekelijks update-PR's voor de Python-dependencies, de GitHub Actions en het Docker-basisimage. Minor- en patch-updates worden per ecosysteem gebundeld. CI controleert elke update-PR.
 
-Lokaal draait `make check` dezelfde controles, behalve PostgreSQL en e2e.
+Lokaal draait `make check` dezelfde controles, behalve PostgreSQL en e2e. Daarnaast controleren **pre-commit hooks** ([.pre-commit-config.yaml](.pre-commit-config.yaml)) bij elke commit ruff, mypy en algemene zaken zoals witruimte, YAML-syntax en per ongeluk meegecommitte private keys. Ruff en mypy draaien daarbij via uv, dus met exact dezelfde versies als in CI.
 
 ---
 
@@ -304,7 +306,7 @@ Ik heb **Claude Code** (Anthropic) gebruikt als pair-programmer, in de terminal 
 **Werkwijze**
 - **Eerst een plan, dan code.** Ik liet de opties en hun afwegingen uitwerken (vooral database-queue tegenover broker) en heb de keuzes zelf gemaakt: stack, queue, database, uit te werken onderdelen, etc.
 - **Kleine stappen, elke stap gecontroleerd.** Na elke wijziging liepen lint, mypy en de tests, op SQLite én PostgreSQL. Daarnaast heb ik de flow handmatig getest.
-- **Begrijpen vóór accepteren.** Onderdelen die ik niet zelf kon onderbouwen, heb ik laten toelichten, aangescherpt of geschrapt. 
+- **Begrijpen vóór accepteren.** Onderdelen die ik niet zelf kon onderbouwen, heb ik laten toelichten, aangescherpt of geschrapt.
 - **AI-output behandel ik als code van een collega:** reviewen, bevragen en pas dan overnemen.
 
 **Ingezet voor:** de eerste versie van de code, de tests, de Docker/CI-configuratie en een opzet voor deze README.
@@ -315,6 +317,10 @@ Ik heb **Claude Code** (Anthropic) gebruikt als pair-programmer, in de terminal 
 - **Afspraken voor AI-tools.** De eerste versie had die niet. AI-gebruik werd bij deze opdracht aangemoedigd en ligt bij verdere ontwikkeling ook voor de hand. Daarom heb ik een eerste versie van [AGENTS.md](AGENTS.md) opgesteld, de open standaard die de meeste AI-tools lezen. Daarin staan de commando's, conventies en regels die het ontwerp bij elkaar houden, zoals "geen documentinhoud in logs". `CLAUDE.md` verwijst ernaar. Een hook in `.claude/` laat ruff elk door AI gewijzigd Python-bestand direct controleren.
 - **Uitbreidbaarheid gecontroleerd en aangescherpt.** De opdracht noemt naast bestellingen ook facturen. Ik heb nagegaan welke delen typespecifiek zijn (alleen validatie en transformatie) en beschreven hoe een tweede type erbij komt.
 - **Documentatie.** Waar nodig heb ik om verduidelijking van documentatie gevraagd, zowel in comments, docstrings als in de README.
+- **Gangbare standaarden nagelopen.** Ik heb de code laten controleren tegen strengere lint-regels en gangbare werkwijzen. Dat leverde drie verbeteringen op:
+  - **Security-regels in CI.** Ruff controleert nu ook op securityproblemen. Daarbij kwam een `assert` in productiecode naar boven; Python slaat die over bij `python -O`. Die is vervangen door een expliciete controle.
+  - **Pre-commit hooks.** De AI-hook gold alleen voor wijzigingen door een AI-tool. Nu controleren ruff en mypy ook elke commit van een mens, met dezelfde versies als CI.
+  - **Versie in de API-paden (`/v1`).** Een toekomstige wijziging die bestaande clients breekt, kan zo naast de huidige versie komen.
 
 **Bewust niet overgenomen**
 - **RabbitMQ als queue.** Complexer, en zonder outbox minder betrouwbaar. In mijn ogen niet in scope voor deze opdracht.

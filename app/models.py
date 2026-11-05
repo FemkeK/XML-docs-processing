@@ -104,7 +104,8 @@ class Document(Base):
         back_populates="document", order_by="DocumentEvent.id", cascade="all, delete-orphan"
     )
 
-    __mapper_args__ = {"version_id_col": version}
+    # SQLAlchemy reads this once at class creation; it is never mutated.
+    __mapper_args__ = {"version_id_col": version}  # noqa: RUF012
     __table_args__ = (
         # Supports the worker's claim query: "next eligible document".
         Index("ix_documents_status_next_attempt", "status", "next_attempt_at"),

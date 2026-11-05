@@ -37,7 +37,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """Runs once: the code before `yield` at startup, the code after it at shutdown."""
         configure_logging(settings.log_level)
         if not settings.api_keys:
-            logger.warning("API_KEYS is empty: every request to /documents will be rejected")
+            logger.warning("API_KEYS is empty: every request to /v1/documents will be rejected")
         yield
         engine.dispose()
 

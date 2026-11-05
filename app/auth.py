@@ -16,7 +16,7 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 def require_api_key(request: Request, api_key: str | None = Security(api_key_header)) -> None:
     """FastAPI dependency: raise 401 unless the request carries a configured API key.
 
-    Applied to the whole /documents router in api.py, so no endpoint can forget it.
+    Applied to the whole /v1/documents router in api.py, so no endpoint can forget it.
     """
     valid_keys: list[str] = request.app.state.settings.api_keys
     # compare_digest takes the same time whether a key matches or not, which prevents

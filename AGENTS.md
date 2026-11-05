@@ -8,7 +8,7 @@ changing the queue, the worker or the API.
 ## Commands
 
 ```bash
-make install        # dependencies (Python 3.12 via uv)
+make install        # dependencies (Python 3.12 via uv) and the git pre-commit hooks
 make check          # lint, mypy, tests with coverage, pip-audit: must pass before you are done
 make up             # full stack in Docker (PostgreSQL, migrations, API, worker)
 make e2e            # end-to-end tests against the running stack
@@ -47,6 +47,8 @@ These hold the design together. Do not break them without updating the README an
 - **Untrusted XML goes through `parse_and_validate()`.** Never parse with a default lxml parser
   (XXE).
 - **Money is `Decimal`, and leaves the API as a string.** Never use float for amounts.
+- **Breaking API changes get a new version prefix** (`/v2`) next to `/v1`; never change the
+  meaning of an existing `/v1` endpoint. The prefix lives in `api.API_PREFIX`.
 - **No docstrings on endpoint functions.** FastAPI shows them in Swagger; use `summary=` and
   `description=` instead.
 - **No new dependencies without checking where they come from.** Prefer the standard library

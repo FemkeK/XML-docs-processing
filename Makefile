@@ -1,7 +1,7 @@
 # Common commands. `make` (or `make help`) lists them all.
 
 .DEFAULT_GOAL := help
-.PHONY: help install up down clean logs demo e2e test lint format typecheck audit check
+.PHONY: help install up down clean logs demo e2e test lint format typecheck hooks audit check
 
 E2E_BASE_URL ?= http://localhost:8000
 E2E_API_KEY ?= dev-key
@@ -9,8 +9,9 @@ E2E_API_KEY ?= dev-key
 help: ## Show this list
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install dependencies (Python 3.12 via uv)
+install: ## Install dependencies and the git pre-commit hooks
 	uv sync
+	uv run pre-commit install
 
 # --- Docker stack ---------------------------------------------------------------
 
@@ -47,6 +48,9 @@ format: ## Format the code and apply safe lint fixes
 
 typecheck: ## Type check with mypy
 	uv run mypy
+
+hooks: ## Run all pre-commit hooks on all files
+	uv run pre-commit run --all-files
 
 audit: ## Scan runtime dependencies for known vulnerabilities
 	@requirements=$$(mktemp) && \

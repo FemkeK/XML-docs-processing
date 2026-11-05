@@ -46,7 +46,14 @@ Example order (copy it into the request body under *Try it out*):
 {EXAMPLE_ORDER_XML}```
 """
 
-router = APIRouter(prefix="/documents", tags=["documents"], dependencies=[Depends(require_api_key)])
+# Version prefix of the client contract. A breaking change gets /v2 next to it, so existing
+# clients keep working. /health is for infrastructure, not part of the contract, and has none.
+API_PREFIX = "/v1"
+DOCUMENTS_PATH = f"{API_PREFIX}/documents"
+
+router = APIRouter(
+    prefix=DOCUMENTS_PATH, tags=["documents"], dependencies=[Depends(require_api_key)]
+)
 health_router = APIRouter(tags=["health"])
 
 
@@ -108,7 +115,9 @@ async def read_xml_body(request: Request) -> bytes:
 
 def _links(document_id: uuid.UUID) -> Links:
     """Links to the document's status and result."""
-    return Links(self=f"/documents/{document_id}", result=f"/documents/{document_id}/result")
+    return Links(
+        self=f"{DOCUMENTS_PATH}/{document_id}", result=f"{DOCUMENTS_PATH}/{document_id}/result"
+    )
 
 
 def _get_or_404(session: Session, document_id: uuid.UUID, with_events: bool = False) -> Document:
@@ -121,7 +130,7 @@ def _get_or_404(session: Session, document_id: uuid.UUID, with_events: bool = Fa
 
 def _submit_response(document: Document, response: Response) -> SubmitResponse:
     """Response body for an accepted document, with a Location header pointing to it."""
-    response.headers["Location"] = f"/documents/{document.id}"
+    response.headers["Location"] = f"{DOCUMENTS_PATH}/{document.id}"
     return SubmitResponse(id=document.id, status=document.status, links=_links(document.id))
 
 
@@ -156,8 +165,10 @@ async def stale_data_error_handler(_request: Request, _exc: Exception) -> JSONRe
 
 async def xml_validation_error_handler(_request: Request, exc: Exception) -> JSONResponse:
     """Turn validation errors into 400 (not well-formed) or 422 (does not match the schema)."""
-    # Registered for XmlValidationError only. Starlette types every handler with Exception.
-    assert isinstance(exc, XmlValidationError)
+    # Registered for XmlValidationError only. Starlette types every handler with Exception,
+    # so narrow the type explicitly (not with assert, which `python -O` removes).
+    if not isinstance(exc, XmlValidationError):
+        raise TypeError(f"Unexpected exception type: {type(exc).__name__}") from exc
     if isinstance(exc, MalformedXmlError):
         status_code = status.HTTP_400_BAD_REQUEST
     else:

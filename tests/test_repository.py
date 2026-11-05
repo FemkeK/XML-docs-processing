@@ -99,7 +99,7 @@ def test_retry_waits_until_next_attempt_at(session_factory, clock, document_id):
 def test_requeue_only_allowed_for_failed(session_factory, clock, document_id):
     with session_factory.begin() as session:
         document = repository.get_document(session, document_id)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Only FAILED documents can be requeued"):
             repository.requeue(session, document, clock())
 
     claimed = _claim(session_factory, clock)

@@ -14,7 +14,7 @@ def _submit(client, sample="valid_order.xml", idempotency_key=None):
     headers = dict(XML)
     if idempotency_key:
         headers["Idempotency-Key"] = idempotency_key
-    return client.post("/documents", content=load_sample(sample), headers=headers)
+    return client.post("/v1/documents", content=load_sample(sample), headers=headers)
 
 
 # --- Full flow --------------------------------------------------------------------
@@ -25,7 +25,7 @@ def test_full_flow_from_submit_to_result(client, make_worker):
     assert response.status_code == 202
     body = response.json()
     assert body["status"] == "RECEIVED"
-    assert response.headers["Location"] == f"/documents/{body['id']}"
+    assert response.headers["Location"] == f"/v1/documents/{body['id']}"
 
     # Not processed yet, so there is no result.
     assert client.get(body["links"]["result"]).status_code == 409
@@ -50,18 +50,18 @@ def test_failed_processing_is_visible_and_can_be_requeued(client, make_worker):
     document_id = _submit(client, "total_mismatch_order.xml").json()["id"]
     make_worker().run_once()
 
-    detail = client.get(f"/documents/{document_id}").json()
+    detail = client.get(f"/v1/documents/{document_id}").json()
     assert detail["status"] == "FAILED"
     assert "does not match" in detail["last_error"]
 
-    response = client.post(f"/documents/{document_id}/retry")
+    response = client.post(f"/v1/documents/{document_id}/retry")
     assert response.status_code == 202
     assert response.json()["status"] == "RECEIVED"
 
 
 def test_retry_of_non_failed_document_is_conflict(client):
     document_id = _submit(client).json()["id"]
-    assert client.post(f"/documents/{document_id}/retry").status_code == 409
+    assert client.post(f"/v1/documents/{document_id}/retry").status_code == 409
 
 
 def test_list_documents_with_status_filter(client, make_worker):
@@ -69,8 +69,8 @@ def test_list_documents_with_status_filter(client, make_worker):
     make_worker().run_once()
     _submit(client)
 
-    assert len(client.get("/documents").json()) == 2
-    received = client.get("/documents", params={"status": "RECEIVED"}).json()
+    assert len(client.get("/v1/documents").json()) == 2
+    received = client.get("/v1/documents", params={"status": "RECEIVED"}).json()
     assert [document["status"] for document in received] == ["RECEIVED"]
 
 
@@ -85,7 +85,7 @@ def test_resubmission_with_same_key_returns_existing_document(client):
     assert second.status_code == 200
     assert second.headers["Idempotent-Replayed"] == "true"
     assert second.json()["id"] == first.json()["id"]
-    assert len(client.get("/documents").json()) == 1
+    assert len(client.get("/v1/documents").json()) == 1
 
 
 def test_replay_shows_current_status(client, make_worker):
@@ -106,7 +106,7 @@ def test_same_key_for_different_document_is_rejected(client):
 def test_without_key_every_submission_is_a_new_document(client):
     _submit(client)
     _submit(client)
-    assert len(client.get("/documents").json()) == 2
+    assert len(client.get("/v1/documents").json()) == 2
 
 
 def test_simultaneous_duplicates_are_caught_by_unique_constraint(client, monkeypatch):
@@ -126,7 +126,7 @@ def test_simultaneous_duplicates_are_caught_by_unique_constraint(client, monkeyp
 
     assert second.status_code == 200
     assert second.json()["id"] == first.json()["id"]
-    assert len(client.get("/documents").json()) == 1
+    assert len(client.get("/v1/documents").json()) == 1
 
 
 # --- Concurrency ------------------------------------------------------------------
@@ -147,7 +147,7 @@ def test_concurrent_retry_returns_409_instead_of_500(
         real_requeue(session, document, now)
 
     monkeypatch.setattr(repository, "requeue", requeue_after_concurrent_change)
-    response = client.post(f"/documents/{document_id}/retry")
+    response = client.post(f"/v1/documents/{document_id}/retry")
 
     assert response.status_code == 409
     assert "concurrent" in response.json()["detail"]
@@ -189,27 +189,29 @@ def test_xxe_attempt_returns_400(client):
 def test_rejected_documents_are_not_stored(client):
     _submit(client, "invalid_schema_order.xml")
     _submit(client, "malformed.xml")
-    assert client.get("/documents").json() == []
+    assert client.get("/v1/documents").json() == []
 
 
 def test_wrong_content_type_returns_415(client):
     response = client.post(
-        "/documents", content=load_sample("valid_order.xml"), headers={"Content-Type": "text/plain"}
+        "/v1/documents",
+        content=load_sample("valid_order.xml"),
+        headers={"Content-Type": "text/plain"},
     )
     assert response.status_code == 415
 
 
 def test_oversized_document_returns_413(client, settings):
     too_big = b"<order>" + b"x" * settings.max_document_bytes + b"</order>"
-    assert client.post("/documents", content=too_big, headers=XML).status_code == 413
+    assert client.post("/v1/documents", content=too_big, headers=XML).status_code == 413
 
 
 def test_empty_body_returns_400(client):
-    assert client.post("/documents", content=b"", headers=XML).status_code == 400
+    assert client.post("/v1/documents", content=b"", headers=XML).status_code == 400
 
 
 def test_unknown_document_returns_404(client):
-    assert client.get("/documents/00000000-0000-0000-0000-000000000000").status_code == 404
+    assert client.get("/v1/documents/00000000-0000-0000-0000-000000000000").status_code == 404
 
 
 # --- Authentication and cross-cutting concerns ------------------------------------
@@ -217,8 +219,8 @@ def test_unknown_document_returns_404(client):
 
 def test_missing_or_wrong_api_key_returns_401(client):
     del client.headers["X-API-Key"]
-    assert client.get("/documents").status_code == 401
-    response = client.get("/documents", headers={"X-API-Key": "wrong"})
+    assert client.get("/v1/documents").status_code == 401
+    response = client.get("/v1/documents", headers={"X-API-Key": "wrong"})
     assert response.status_code == 401
     assert response.headers["WWW-Authenticate"] == "ApiKey"
 

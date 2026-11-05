@@ -61,7 +61,8 @@ def with_simulated_failures(processor: Processor, failure_rate: float) -> Proces
         return processor
 
     def flaky(content: bytes) -> dict[str, Any]:
-        if random.random() < failure_rate:
+        # Not security-related: only decides which demo attempts fail.
+        if random.random() < failure_rate:  # noqa: S311
             raise TransientProcessingError("Simulated transient failure")
         return processor(content)
 

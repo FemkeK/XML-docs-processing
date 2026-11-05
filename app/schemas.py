@@ -16,7 +16,7 @@ class Links(BaseModel):
 
 
 class SubmitResponse(BaseModel):
-    """Response to POST /documents and POST /documents/{id}/retry."""
+    """Response to POST /v1/documents and POST /v1/documents/{id}/retry."""
 
     id: uuid.UUID
     status: DocumentStatus
@@ -47,7 +47,7 @@ class DocumentSummary(BaseModel):
 
 
 class DocumentDetail(DocumentSummary):
-    """GET /documents/{id}: the summary plus the last error and the full history."""
+    """GET /v1/documents/{id}: the summary plus the last error and the full history."""
 
     last_error: str | None
     next_attempt_at: datetime | None
@@ -56,7 +56,7 @@ class DocumentDetail(DocumentSummary):
 
 
 class DocumentResult(BaseModel):
-    """GET /documents/{id}/result: the JSON produced by the worker."""
+    """GET /v1/documents/{id}/result: the JSON produced by the worker."""
 
     id: uuid.UUID
     result: dict

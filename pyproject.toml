@@ -23,6 +23,7 @@ dev = [
     "lxml-stubs>=0.5.1",
     "pytest-cov>=7.1.0",
     "pip-audit>=2.10.1",
+    "pre-commit>=4.7.0",
 ]
 
 # An application, not a library: no wheel is built; `app` is imported from the project root.
@@ -45,7 +46,13 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "SIM"]
+# E/F: pycodestyle and pyflakes, I: import order, B: likely bugs, UP: modern syntax,
+# SIM: simplifications, S: security (bandit), RUF: ruff's own checks, PT: pytest style.
+select = ["E", "F", "I", "B", "UP", "SIM", "S", "RUF", "PT"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use assert by design, and fixed test credentials such as API_KEY = "test-key".
+"tests/**" = ["S101", "S105", "S106"]
 
 [tool.mypy]
 python_version = "3.12"
