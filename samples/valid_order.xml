@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<order>
+  <orderId>ORD-2026-0001</orderId>
+  <orderDate>2026-11-02</orderDate>
+  <currency>EUR</currency>
+  <customer>
+    <customerId>CUST-042</customerId>
+    <name>Lab Supplies B.V.</name>
+    <email>inkoop@labsupplies.example</email>
+  </customer>
+  <lines>
+    <line>
+      <sku>PIP-1000</sku>
+      <description>Pipette tips 1000 µl (rack of 96)</description>
+      <quantity>10</quantity>
+      <unitPrice>12.50</unitPrice>
+    </line>
+    <line>
+      <sku>GLV-M</sku>
+      <description>Nitrile gloves, size M (box of 100)</description>
+      <quantity>4</quantity>
+      <unitPrice>8.95</unitPrice>
+    </line>
+  </lines>
+  <total>160.80</total>
+</order>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- XXE attempt: tries to read a local file through an external entity. The DOCTYPE
+     is refused, so the entity is never resolved. Rejected with 400. -->
+<!DOCTYPE order [ <!ENTITY secret SYSTEM "file:///etc/passwd"> ]>
+<order>
+  <orderId>&secret;</orderId>
+</order>

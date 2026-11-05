@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Not well-formed: the <customer> element is never closed. Rejected with 400. -->
+<order>
+  <orderId>ORD-2026-0003</orderId>
+  <customer>
+    <name>Lab Supplies B.V.</name>
+</order>

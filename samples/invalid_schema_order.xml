@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Well-formed XML that violates the schema: missing customer email, negative
+     quantity, three decimals in a price and a duplicate SKU. Rejected with 422. -->
+<order>
+  <orderId>ORD-2026-0002</orderId>
+  <orderDate>2026-11-02</orderDate>
+  <currency>EUR</currency>
+  <customer>
+    <customerId>CUST-042</customerId>
+    <name>Lab Supplies B.V.</name>
+  </customer>
+  <lines>
+    <line>
+      <sku>PIP-1000</sku>
+      <quantity>-1</quantity>
+      <unitPrice>12.505</unitPrice>
+    </line>
+    <line>
+      <sku>PIP-1000</sku>
+      <quantity>2</quantity>
+      <unitPrice>12.50</unitPrice>
+    </line>
+  </lines>
+  <total>12.50</total>
+</order>

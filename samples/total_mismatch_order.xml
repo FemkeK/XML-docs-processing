@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Valid against the schema, so it is accepted (202). The declared total does not
+     match the sum of the lines (10 x 12.50 = 125.00), so processing ends in FAILED. -->
+<order>
+  <orderId>ORD-2026-0004</orderId>
+  <orderDate>2026-11-02</orderDate>
+  <currency>EUR</currency>
+  <customer>
+    <customerId>CUST-042</customerId>
+    <name>Lab Supplies B.V.</name>
+    <email>inkoop@labsupplies.example</email>
+  </customer>
+  <lines>
+    <line>
+      <sku>PIP-1000</sku>
+      <quantity>10</quantity>
+      <unitPrice>12.50</unitPrice>
+    </line>
+  </lines>
+  <total>999.00</total>
+</order>

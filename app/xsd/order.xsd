@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Structure of an incoming order document.
+
+  The schema checks structure and data types only. Rules that need computation over
+  several fields (such as "the declared total equals the sum of the lines") are checked
+  later, during asynchronous processing. See app/processing.py.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+
+  <xs:element name="order" type="OrderType">
+    <!-- A SKU may appear only once per order; quantities belong on a single line. -->
+    <xs:unique name="uniqueSku">
+      <xs:selector xpath="lines/line"/>
+      <xs:field xpath="sku"/>
+    </xs:unique>
+  </xs:element>
+
+  <xs:complexType name="OrderType">
+    <xs:sequence>
+      <xs:element name="orderId" type="IdentifierType"/>
+      <xs:element name="orderDate" type="xs:date"/>
+      <xs:element name="currency" type="CurrencyType"/>
+      <xs:element name="customer" type="CustomerType"/>
+      <xs:element name="lines" type="LinesType"/>
+      <xs:element name="total" type="MoneyType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="CustomerType">
+    <xs:sequence>
+      <xs:element name="customerId" type="IdentifierType"/>
+      <xs:element name="name" type="NonEmptyStringType"/>
+      <xs:element name="email" type="EmailType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="LinesType">
+    <xs:sequence>
+      <!-- Bounded, so one document cannot grow without limit. -->
+      <xs:element name="line" type="LineType" minOccurs="1" maxOccurs="1000"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="LineType">
+    <xs:sequence>
+      <xs:element name="sku" type="IdentifierType"/>
+      <xs:element name="description" type="NonEmptyStringType" minOccurs="0"/>
+      <xs:element name="quantity" type="QuantityType"/>
+      <xs:element name="unitPrice" type="MoneyType"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:simpleType name="IdentifierType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[A-Za-z0-9][A-Za-z0-9_\-]{0,49}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="NonEmptyStringType">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+      <xs:maxLength value="200"/>
+      <xs:pattern value=".*\S.*"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="EmailType">
+    <xs:restriction base="xs:string">
+      <xs:maxLength value="254"/>
+      <xs:pattern value="[^@\s]+@[^@\s]+\.[^@\s]+"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ISO 4217 currency code, for example EUR. -->
+  <xs:simpleType name="CurrencyType">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[A-Z]{3}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="QuantityType">
+    <xs:restriction base="xs:positiveInteger">
+      <xs:maxInclusive value="100000"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Non-negative amount with at most two decimal places. -->
+  <xs:simpleType name="MoneyType">
+    <xs:restriction base="xs:decimal">
+      <xs:minInclusive value="0"/>
+      <xs:fractionDigits value="2"/>
+      <xs:totalDigits value="14"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>
