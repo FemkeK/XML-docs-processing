@@ -1,0 +1,81 @@
+# Local development stack: PostgreSQL, a migration step, the API and the worker.
+#   docker compose up -d --build                  start everything
+#   docker compose up -d --scale worker=3         several workers side by side
+#   SIMULATED_FAILURE_RATE=0.5 docker compose up  show retries (demo)
+#
+# The passwords and API key below are for local development only.
+
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql+psycopg://app:app@db:5432/documents
+  API_KEYS: ${API_KEYS:-dev-key}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: documents
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d documents"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # One-off step: bring the schema up to date, then exit. The API and worker only start
+  # after it finishes successfully, so they never run against an outdated schema.
+  migrate:
+    image: xml-document-processor:local
+    pull_policy: never
+    command: ["alembic", "upgrade", "head"]
+    environment: *app-environment
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    image: xml-document-processor:local
+    environment: *app-environment
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  worker:
+    # Same image as the api service (which builds it); never pull it from a registry.
+    image: xml-document-processor:local
+    pull_policy: never
+    command: ["python", "-m", "app.worker"]
+    environment:
+      <<: *app-environment
+      SIMULATED_FAILURE_RATE: ${SIMULATED_FAILURE_RATE:-0}
+      WORKER_HEARTBEAT_FILE: /tmp/worker-heartbeat
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    # The worker has no HTTP port; the healthcheck looks at the age of its heartbeat file.
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.worker_healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    # Restart after a crash. Compose does not restart on "unhealthy"; an orchestrator
+    # (Kubernetes liveness probe) does.
+    restart: unless-stopped
+    # Time to finish the current document after SIGTERM.
+    stop_grace_period: 30s
+
+volumes:
+  pgdata:
