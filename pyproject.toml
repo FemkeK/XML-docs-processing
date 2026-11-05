@@ -1,0 +1,75 @@
+[project]
+name = "xml-document-processor"
+version = "0.1.0"
+description = "Receives XML order documents via an API and processes them asynchronously."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0.36",
+    "psycopg[binary]>=3.2",
+    "lxml>=5.3",
+    "pydantic-settings>=2.6",
+    "alembic>=1.20.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.28",
+    "ruff>=0.8",
+    "mypy>=2.4.1",
+    "lxml-stubs>=0.5.1",
+    "pytest-cov>=7.1.0",
+    "pip-audit>=2.10.1",
+]
+
+# An application, not a library: no wheel is built; `app` is imported from the project root.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+    # Starlette points to a successor of httpx for its TestClient; httpx still works fine.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
+markers = [
+    "e2e: runs against a live stack (set E2E_BASE_URL); skipped otherwise",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app", "migrations"]
+plugins = ["pydantic.mypy"]
+# Every function in app/ needs type annotations; tests are only type-checked lightly.
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+no_implicit_optional = true
+strict_equality = true
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+# CI fails below this percentage. Set just under the current level so coverage cannot
+# quietly drop.
+fail_under = 90
+exclude_also = [
+    'if __name__ == "__main__":',
+]
